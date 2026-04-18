@@ -1,276 +1,231 @@
 # Meeting Intelligence Engine
 
-An AI-powered system that automatically transcribes meeting audio and extracts useful insights such as summaries and action items.
+Meeting Intelligence Engine is a full-stack app that transcribes uploaded meeting audio and extracts structured insights.
 
-The system converts speech into text and then uses a large language model to analyze the conversation and generate structured meeting information.
+Current processing flow:
 
----
+1. Frontend uploads an audio file to FastAPI.
+2. Whisper transcribes speech to text.
+3. Ollama (Llama3) extracts summary, action items, decisions, and open issues.
+4. Data is stored in PostgreSQL and returned to the frontend.
 
 ## Features
 
-- Upload meeting audio files
-- Automatic speech transcription
-- AI-generated meeting summary
-- Action item detection
-- Meeting history storage
-- Web dashboard interface
-
----
+- Audio upload from web UI
+- Whisper-based transcription
+- AI-generated summary and action items
+- Decisions and open issues extraction
+- Meeting history from PostgreSQL
 
 ## Tech Stack
 
-### Backend
+Backend:
+
+- Python 3.10+
 - FastAPI
-- Python
-- Whisper (speech-to-text)
-- Ollama + Llama3
-- PostgreSQL
 - SQLAlchemy
+- PostgreSQL
+- openai-whisper
+- Ollama (llama3)
 - FFmpeg
 
-### Frontend
-- React
+Frontend:
+
+- React (Create React App)
 - Axios
-- CSS
 
----
+## Project Structure
 
-## System Architecture
-
-User Uploads Audio  
-↓  
-React Frontend  
-↓  
-FastAPI Backend  
-↓  
-Whisper (Speech → Text)  
-↓  
-Llama3 via Ollama (Meeting Analysis)  
-↓  
-PostgreSQL Database  
-↓  
-Insights Returned to Frontend  
-
----
+- backend: FastAPI app, DB models, transcription, LLM integration
+- frontend: React app
 
 ## Prerequisites
 
-Install the following software before running the project:
+Install before setup:
 
 - Python 3.10+
-- Node.js (v18+ recommended)
-- Git
+- Node.js 18+
 - PostgreSQL
 - FFmpeg
 - Ollama
 
----
+## Backend Setup
 
-## Clone the Repository
-
-```bash
-git clone https://github.com/Devansh7617/meeting-intelligence.git
-cd meeting-intelligence
-```
-
----
-
-# Backend Setup
-
-Navigate to the backend folder:
+From repository root:
 
 ```bash
 cd backend
-```
-
-Create virtual environment:
-
-```bash
 python -m venv venv
+venv/Scripts/activate
+pip install fastapi uvicorn sqlalchemy psycopg2-binary openai-whisper requests python-multipart python-dotenv
 ```
 
-Activate virtual environment (Windows):
+### Database Configuration
+
+Create a PostgreSQL database named:
+
+```text
+meetingdb
+```
+
+Configure environment values in backend/.env.
+
+Minimum required option A (split fields):
+
+```env
+DB_USER=postgres
+DB_PASSWORD=yourpassword
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=meetingdb
+```
+
+Option B (single connection string):
+
+```env
+DATABASE_URL=postgresql://postgres:yourpassword@localhost:5432/meetingdb
+```
+
+Note: DB_PASSWORD is required when DATABASE_URL is not provided.
+
+### FFmpeg Configuration
+
+Whisper requires ffmpeg available to the backend process.
+
+Option A:
+
+- Add your FFmpeg bin folder to system PATH.
+
+Option B:
+
+- Set FFMPEG_PATH in backend/.env to your FFmpeg bin folder.
+
+Example:
+
+```env
+FFMPEG_PATH=C:\ffmpeg\bin
+```
+
+Verify from backend environment:
 
 ```bash
-venv\Scripts\activate
+venv\Scripts\python.exe -c "import shutil; print(shutil.which('ffmpeg'))"
 ```
 
-Install backend dependencies:
+If this prints None, uploads will fail.
 
-```bash
-pip install fastapi uvicorn sqlalchemy psycopg2-binary openai-whisper requests python-multipart
-```
+### Ollama Setup
 
----
-
-# Install Ollama and Llama3
-
-Download Ollama:
+Install Ollama from:
 
 https://ollama.com
 
-Pull the Llama3 model:
+Pull model:
 
 ```bash
 ollama pull llama3
 ```
 
-Start Ollama server:
+Start Ollama:
 
 ```bash
 ollama serve
 ```
 
----
+Backend expects Ollama at:
 
-# Setup PostgreSQL
-
-Create a database called:
-
-```
-meetingdb
+```text
+http://localhost:11434
 ```
 
-Update database connection in:
+## Run Backend
 
-```
-backend/db.py
-```
-
-Example:
-
-```
-DATABASE_URL = "postgresql://postgres:yourpassword@localhost:5432/meetingdb"
-```
-
----
-
-# Install FFmpeg
-
-Download FFmpeg from:
-
-https://ffmpeg.org/download.html
-
-Add the FFmpeg `bin` folder to your system PATH.
-
-Verify installation:
+From backend folder:
 
 ```bash
-ffmpeg -version
-```
-
----
-
-# Run Backend Server
-
-From the backend folder:
-
-```bash
-uvicorn main:app --reload
-```
-
-Backend runs at:
-
-```
-http://127.0.0.1:8000
-```
-
-API documentation:
-
-```
-http://127.0.0.1:8000/docs
-```
-
----
-
-# Frontend Setup
-
-Open a new terminal.
-
-Navigate to frontend folder:
-
-```bash
-cd frontend
-```
-
-Install frontend dependencies:
-
-```bash
-npm install
-```
-
-Start React server:
-
-```bash
-npm start
-```
-
-Frontend runs at:
-
-```
-http://localhost:3000
-```
-
----
-
-# Running the Full System
-
-Start services in this order:
-
-1. Start Ollama
-
-```bash
-ollama serve
-```
-
-2. Start Backend
-
-```bash
-cd backend
 venv\Scripts\activate
 uvicorn main:app --reload
 ```
 
-3. Start Frontend
+Backend URL:
+
+```text
+http://127.0.0.1:8000
+```
+
+API docs:
+
+```text
+http://127.0.0.1:8000/docs
+```
+
+## Frontend Setup
+
+From repository root:
 
 ```bash
 cd frontend
+npm install
 npm start
 ```
 
-Open the application:
+Frontend URL:
 
-```
+```text
 http://localhost:3000
 ```
 
----
+## API Endpoints
 
-# Example Workflow
+GET /:
 
-1. Upload meeting audio file
-2. Whisper transcribes speech
-3. Llama3 analyzes transcript
-4. System generates:
-   - Meeting summary
-   - Action items
-   - Decisions
-5. Results displayed on dashboard
+- Health message
 
----
+GET /meetings:
 
-# Future Improvements
+- Returns stored meeting history (id, title, summary, created_at)
 
-- Speaker diarization
-- Real-time meeting transcription
-- Meeting analytics
-- PDF export for meeting minutes
-- User authentication
+POST /upload-audio/:
 
----
+- Accepts multipart file field named file
+- Returns JSON with:
+   - summary
+   - action_items
+   - decisions
+   - open_issues
 
-# Author
+## Run Order
 
-Devansh Seth
+1. Start Ollama server.
+2. Start backend (FastAPI).
+3. Start frontend (React).
+
+## Troubleshooting
+
+### 500 on POST /upload-audio/
+
+Check these first:
+
+1. FFmpeg is discoverable by backend process.
+2. Ollama server is running at localhost:11434.
+3. Database credentials in backend/.env are valid.
+
+### Error: ffmpeg is not available
+
+- Ensure FFMPEG_PATH points to the folder containing ffmpeg.exe.
+- Restart backend after changing environment values.
+
+### Error: Database password not configured
+
+- Set DB_PASSWORD in backend/.env, or set DATABASE_URL.
+
+## Notes
+
+- Current backend catches runtime transcription/setup errors and returns HTTP 500 with detail.
+- Temporary uploaded audio files are cleaned up after processing.
+
+## Author
+
+Devansh Seth, Kartikeya Singh
 
 GitHub: https://github.com/Devansh7617
