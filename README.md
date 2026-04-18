@@ -92,7 +92,7 @@ python -m venv venv
 Activate virtual environment (Windows):
 
 ```bash
-venv\Scripts\activate
+venv/Scripts/activate
 ```
 
 Install backend dependencies:
