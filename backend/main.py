@@ -1,6 +1,8 @@
-from fastapi import FastAPI, UploadFile, File
-from sqlalchemy.orm import Session
+import os
 import shutil
+
+from fastapi import FastAPI, File, HTTPException, UploadFile
+from sqlalchemy.orm import Session
 
 from db import SessionLocal, engine
 from models import Base, Meeting, ActionItem, Decision, Issue
@@ -35,56 +37,63 @@ async def upload_audio(file: UploadFile = File(...)):
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    # transcribe audio
-    transcript = transcribe_audio(file_path)
+    db: Session | None = None
+    try:
+        # transcribe audio
+        transcript = transcribe_audio(file_path)
 
-    # run LLM analysis
-    data = generate_summary(transcript)
+        # run LLM analysis
+        data = generate_summary(transcript)
 
-    # database session
-    db: Session = SessionLocal()
+        # database session
+        db = SessionLocal()
 
-    # store meeting
-    meeting = Meeting(
-        title=file.filename,
-        transcript=transcript,
-        summary=data.get("summary", "")
-    )
-
-    db.add(meeting)
-    db.commit()
-    db.refresh(meeting)
-
-    # store action items
-    for item in data.get("action_items", []):
-        action = ActionItem(
-            meeting_id=meeting.id,
-            task=item.get("task", ""),
-            owner=item.get("owner", ""),
-            deadline=item.get("deadline", "")
+        # store meeting
+        meeting = Meeting(
+            title=file.filename,
+            transcript=transcript,
+            summary=data.get("summary", "")
         )
-        db.add(action)
 
-    # store decisions
-    for d in data.get("decisions", []):
-        decision = Decision(
-            meeting_id=meeting.id,
-            text=d
-        )
-        db.add(decision)
+        db.add(meeting)
+        db.commit()
+        db.refresh(meeting)
 
-    # store issues
-    for issue in data.get("open_issues", []):
-        issue_obj = Issue(
-            meeting_id=meeting.id,
-            text=issue
-        )
-        db.add(issue_obj)
+        # store action items
+        for item in data.get("action_items", []):
+            action = ActionItem(
+                meeting_id=meeting.id,
+                task=item.get("task", ""),
+                owner=item.get("owner", ""),
+                deadline=item.get("deadline", "")
+            )
+            db.add(action)
 
-    db.commit()
-    db.close()
+        # store decisions
+        for d in data.get("decisions", []):
+            decision = Decision(
+                meeting_id=meeting.id,
+                text=d
+            )
+            db.add(decision)
 
-    return data
+        # store issues
+        for issue in data.get("open_issues", []):
+            issue_obj = Issue(
+                meeting_id=meeting.id,
+                text=issue
+            )
+            db.add(issue_obj)
+
+        db.commit()
+        return data
+    except RuntimeError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    finally:
+        if db is not None:
+            db.close()
+        if os.path.exists(file_path):
+            os.remove(file_path)
 
 
 @app.get("/meetings")
