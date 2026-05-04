@@ -1,13 +1,27 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import "./App.css";
 
 function App() {
 
+  const [activeTab, setActiveTab] = useState("upload");
   const [file, setFile] = useState(null);
   const [result, setResult] = useState(null);
   const [meetings, setMeetings] = useState([]);
   const [loading, setLoading] = useState(false);
+
+  // Recording states
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0);
+  const [mediaRecorder, setMediaRecorder] = useState(null);
+  const [micError, setMicError] = useState("");
+  const timerRef = useRef(null);
+
+  const formatTime = (seconds) => {
+    const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+    const s = (seconds % 60).toString().padStart(2, '0');
+    return `${m}:${s}`;
+  };
 
   const uploadFile = async () => {
 
@@ -17,9 +31,7 @@ function App() {
     formData.append("file", file);
 
     try {
-
       setLoading(true);
-
       const res = await axios.post(
         "http://127.0.0.1:8000/upload-audio/",
         formData
@@ -27,43 +39,95 @@ function App() {
 
       setResult(res.data);
       fetchMeetings();
-
     } catch (err) {
-
       console.error(err);
       alert("Error processing meeting");
-
     }
-
     setLoading(false);
   };
 
-
-  const fetchMeetings = async () => {
-
+  const startRecording = async () => {
+    setMicError("");
     try {
-
-      const res = await axios.get(
-        "http://127.0.0.1:8000/meetings"
-      );
-
-      setMeetings(res.data);
-
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      const chunks = [];
+      
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunks.push(e.data);
+      };
+      
+      recorder.onstop = () => {
+        const audioBlob = new Blob(chunks, { type: 'audio/webm' });
+        uploadAudioBlob(audioBlob);
+        stream.getTracks().forEach(track => track.stop());
+      };
+      
+      setMediaRecorder(recorder);
+      recorder.start();
+      setIsRecording(true);
+      setRecordingTime(0);
+      
+      timerRef.current = setInterval(() => {
+        setRecordingTime(prev => prev + 1);
+      }, 1000);
+      
     } catch (err) {
-
-      console.error(err);
-
+      console.error("Mic access denied:", err);
+      setMicError("Microphone access was denied. Please allow microphone access in your browser settings.");
     }
   };
 
+  const stopRecording = () => {
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+      mediaRecorder.stop();
+      setIsRecording(false);
+      clearInterval(timerRef.current);
+    }
+  };
+
+  const uploadAudioBlob = async (blob) => {
+    const formData = new FormData();
+    formData.append("file", blob, `recording-${Date.now()}.webm`);
+
+    try {
+      setLoading(true);
+      const res = await axios.post("http://127.0.0.1:8000/upload-audio/", formData);
+      setResult(res.data);
+      fetchMeetings();
+    } catch (err) {
+      console.error(err);
+      alert("Error processing meeting");
+    }
+    setLoading(false);
+  };
+
+  const resetRecording = () => {
+    setResult(null);
+    setRecordingTime(0);
+  };
+
+  const fetchMeetings = async () => {
+    try {
+      const res = await axios.get(
+        "http://127.0.0.1:8000/meetings"
+      );
+      setMeetings(res.data);
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   useEffect(() => {
-
     fetchMeetings();
-
   }, []);
 
-
+  // Cleanup timer on unmount
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, []);
 
   return (
 
@@ -71,19 +135,64 @@ function App() {
 
       <h1>Meeting Intelligence Engine</h1>
 
-
-      <div className="upload-box">
-
-        <input
-          type="file"
-          onChange={(e) => setFile(e.target.files[0])}
-        />
-
-        <button onClick={uploadFile}>
-          {loading ? "Processing..." : "Upload"}
+      <div className="tab-switcher">
+        <button 
+          className={`tab-btn ${activeTab === 'upload' ? 'active' : ''}`}
+          onClick={() => { setActiveTab('upload'); setResult(null); }}
+        >
+          📁 Upload Audio
         </button>
-
+        <button 
+          className={`tab-btn ${activeTab === 'record' ? 'active' : ''}`}
+          onClick={() => { setActiveTab('record'); setResult(null); }}
+        >
+          🎙️ Record Audio
+        </button>
       </div>
+
+      {activeTab === 'upload' && (
+        <div className="upload-box">
+
+          <input
+            type="file"
+            onChange={(e) => setFile(e.target.files[0])}
+          />
+
+          <button onClick={uploadFile} disabled={loading}>
+            {loading ? "Processing..." : "Upload"}
+          </button>
+
+        </div>
+      )}
+
+      {activeTab === 'record' && (
+        <div className="upload-box" style={{ flexDirection: 'column' }}>
+          {micError && <p className="mic-error">{micError}</p>}
+          
+          {!isRecording && !loading && !result && (
+            <button onClick={startRecording}>Start Recording</button>
+          )}
+
+          {isRecording && (
+            <div className="recording-indicator">
+              <div className="red-dot"></div>
+              <span className="timer">{formatTime(recordingTime)}</span>
+              <button onClick={stopRecording}>Stop & Analyse</button>
+            </div>
+          )}
+
+          {loading && (
+            <div className="spinner-container">
+              <div className="spinner"></div>
+              <p>Transcribing & analysing…</p>
+            </div>
+          )}
+
+          {result && !loading && (
+             <button onClick={resetRecording}>Record Again</button>
+          )}
+        </div>
+      )}
 
 
       {result && (
