@@ -48,9 +48,10 @@ async def upload_audio(file: UploadFile = File(...)):
         # database session
         db = SessionLocal()
 
-        # store meeting
+        # store meeting — use LLM-generated title, fall back to filename
+        ai_title = data.get("meeting_title") or file.filename
         meeting = Meeting(
-            title=file.filename,
+            title=ai_title,
             transcript=transcript,
             summary=data.get("summary", "")
         )
@@ -86,6 +87,8 @@ async def upload_audio(file: UploadFile = File(...)):
             db.add(issue_obj)
 
         db.commit()
+        data["transcript"] = transcript
+        data["meeting_title"] = ai_title
         return data
     except RuntimeError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
@@ -106,13 +109,35 @@ def get_meetings():
     results = []
 
     for m in meetings:
+        action_items = db.query(ActionItem).filter(ActionItem.meeting_id == m.id).all()
         results.append({
             "id": m.id,
             "title": m.title,
+            "transcript": m.transcript,
             "summary": m.summary,
-            "created_at": m.created_at
+            "created_at": m.created_at,
+            "action_items": [
+                {"task": a.task, "owner": a.owner, "deadline": a.deadline}
+                for a in action_items
+            ],
+            "meeting_title": m.title,
         })
 
     db.close()
 
     return results
+
+
+
+@app.delete("/meetings")
+def clear_meetings():
+    db: Session = SessionLocal()
+    try:
+        db.query(ActionItem).delete()
+        db.query(Decision).delete()
+        db.query(Issue).delete()
+        db.query(Meeting).delete()
+        db.commit()
+        return {"message": "All meetings cleared."}
+    finally:
+        db.close()
