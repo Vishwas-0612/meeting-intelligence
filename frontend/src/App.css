@@ -1029,3 +1029,17 @@
 .back-btn:hover {
   transform: translateX(-2px);
 }
+
+/* =====================================================
+   Delete button on meeting cards
+   ===================================================== */
+.btn-delete {
+  color: var(--text-subtle);
+  border-color: var(--border);
+}
+
+.btn-delete:hover {
+  color: var(--red);
+  border-color: rgba(239, 68, 68, 0.4);
+  background: rgba(239, 68, 68, 0.08);
+}

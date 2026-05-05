@@ -10,7 +10,6 @@ from whisper_utils import transcribe_audio
 from llm import generate_summary
 from fastapi.middleware.cors import CORSMiddleware
 
-# create database tables
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
@@ -30,61 +29,39 @@ def root():
 
 @app.post("/upload-audio/")
 async def upload_audio(file: UploadFile = File(...)):
-
-    # save uploaded file
     file_path = f"temp_{file.filename}"
-
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
     db: Session | None = None
     try:
-        # transcribe audio
         transcript = transcribe_audio(file_path)
-
-        # run LLM analysis
         data = generate_summary(transcript)
-
-        # database session
         db = SessionLocal()
 
-        # store meeting — use LLM-generated title, fall back to filename
         ai_title = data.get("meeting_title") or file.filename
         meeting = Meeting(
             title=ai_title,
             transcript=transcript,
             summary=data.get("summary", "")
         )
-
         db.add(meeting)
         db.commit()
         db.refresh(meeting)
 
-        # store action items
         for item in data.get("action_items", []):
-            action = ActionItem(
+            db.add(ActionItem(
                 meeting_id=meeting.id,
                 task=item.get("task", ""),
                 owner=item.get("owner", ""),
                 deadline=item.get("deadline", "")
-            )
-            db.add(action)
+            ))
 
-        # store decisions
         for d in data.get("decisions", []):
-            decision = Decision(
-                meeting_id=meeting.id,
-                text=d
-            )
-            db.add(decision)
+            db.add(Decision(meeting_id=meeting.id, text=d))
 
-        # store issues
         for issue in data.get("open_issues", []):
-            issue_obj = Issue(
-                meeting_id=meeting.id,
-                text=issue
-            )
-            db.add(issue_obj)
+            db.add(Issue(meeting_id=meeting.id, text=issue))
 
         db.commit()
         data["transcript"] = transcript
@@ -101,13 +78,9 @@ async def upload_audio(file: UploadFile = File(...)):
 
 @app.get("/meetings")
 def get_meetings():
-
     db: Session = SessionLocal()
-
     meetings = db.query(Meeting).all()
-
     results = []
-
     for m in meetings:
         action_items = db.query(ActionItem).filter(ActionItem.meeting_id == m.id).all()
         results.append({
@@ -122,11 +95,25 @@ def get_meetings():
             ],
             "meeting_title": m.title,
         })
-
     db.close()
-
     return results
 
+
+@app.delete("/meetings/{meeting_id}")
+def delete_meeting(meeting_id: int):
+    db: Session = SessionLocal()
+    try:
+        meeting = db.query(Meeting).filter(Meeting.id == meeting_id).first()
+        if not meeting:
+            raise HTTPException(status_code=404, detail="Meeting not found")
+        db.query(ActionItem).filter(ActionItem.meeting_id == meeting_id).delete()
+        db.query(Decision).filter(Decision.meeting_id == meeting_id).delete()
+        db.query(Issue).filter(Issue.meeting_id == meeting_id).delete()
+        db.delete(meeting)
+        db.commit()
+        return {"message": f"Meeting {meeting_id} deleted."}
+    finally:
+        db.close()
 
 
 @app.delete("/meetings")
@@ -140,4 +127,4 @@ def clear_meetings():
         db.commit()
         return {"message": "All meetings cleared."}
     finally:
-        db.close()
+        db.close()

@@ -311,6 +311,20 @@ export default function App() {
     } catch (err) { alert("Failed to clear meetings."); }
   };
 
+  const deleteMeeting = async (meetingId, e) => {
+    e.stopPropagation();
+    if (!window.confirm("Delete this meeting permanently from the database?")) return;
+    try {
+      await axios.delete(`http://127.0.0.1:8000/meetings/${meetingId}`);
+      setMeetings(prev => prev.filter(m => m.id !== meetingId));
+      // If currently viewing this meeting, go back
+      if (result && result.id === meetingId) {
+        setResult(null);
+        setResultSource(null);
+      }
+    } catch (err) { alert("Failed to delete meeting."); }
+  };
+
   useEffect(() => { fetchMeetings(); }, []);
   useEffect(() => () => { if (timerRef.current) clearInterval(timerRef.current); }, []);
 
@@ -399,7 +413,7 @@ export default function App() {
       <nav className="topnav">
         <div className="topnav-brand">
           <div className="brand-icon"><Mic size={16} color="#fff" strokeWidth={2.5} /></div>
-          <span className="brand-name">Meeting Intelligence</span>
+          <span className="brand-name">MeetingIQ</span>
           <span className="brand-badge">AI</span>
         </div>
         <div className="topnav-actions">
@@ -608,17 +622,27 @@ export default function App() {
                           {m.action_items?.length > 0 && <span>· {m.action_items.length} action{m.action_items.length !== 1 ? "s" : ""}</span>}
                         </div>
                       </div>
-                      <button
-                        className="btn btn-ghost"
-                        style={{ fontSize: "0.8rem" }}
-                        onClick={() => {
-                          setResult(m);
-                          setResultSource("history");
-                          setActiveNav("dashboard");
-                        }}
-                      >
-                        View <ChevronRight size={14} />
-                      </button>
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <button
+                          className="btn btn-ghost"
+                          style={{ fontSize: "0.8rem" }}
+                          onClick={() => {
+                            setResult(m);
+                            setResultSource("history");
+                            setActiveNav("dashboard");
+                          }}
+                        >
+                          View <ChevronRight size={14} />
+                        </button>
+                        <button
+                          className="btn btn-ghost btn-delete"
+                          style={{ fontSize: "0.8rem", padding: "8px 12px" }}
+                          onClick={(e) => deleteMeeting(m.id, e)}
+                          title="Delete this meeting permanently"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
