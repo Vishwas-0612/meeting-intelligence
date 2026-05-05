@@ -52,7 +52,7 @@
   font-weight: 600;
   background: var(--brand-dim);
   color: var(--brand-hover);
-  border: 1px solid rgba(99,102,241,0.25);
+  border: 1px solid rgba(99, 102, 241, 0.25);
   border-radius: 99px;
   padding: 2px 8px;
   letter-spacing: 0.05em;
@@ -137,7 +137,9 @@
   color: var(--brand-hover);
 }
 
-.sidebar-item.active svg { color: var(--brand); }
+.sidebar-item.active svg {
+  color: var(--brand);
+}
 
 .sidebar-bottom {
   margin-top: auto;
@@ -182,9 +184,9 @@
 }
 
 /* =====================================================
-   Tab Switcher  (from feature-liveRecording, restyled)
+   Record Tabs (Upload / Record switcher)
    ===================================================== */
-.tab-switcher {
+.record-tabs {
   display: flex;
   gap: 8px;
   background: var(--surface);
@@ -194,31 +196,98 @@
   width: fit-content;
 }
 
-.tab-btn {
+.record-tab {
   display: inline-flex;
   align-items: center;
   gap: 7px;
+  padding: 9px 20px;
+  border-radius: var(--radius);
+  border: none;
   background: transparent;
   color: var(--text-muted);
-  border: none;
-  border-radius: var(--radius);
-  padding: 9px 20px;
   font-size: 0.875rem;
   font-weight: 600;
-  font-family: inherit;
   cursor: pointer;
   transition: all 0.15s ease;
 }
 
-.tab-btn:hover:not(.active) {
+.record-tab:hover {
   background: var(--surface-2);
   color: var(--text);
 }
 
-.tab-btn.active {
+.record-tab.active {
   background: var(--brand);
   color: #fff;
   box-shadow: 0 2px 8px var(--brand-glow);
+}
+
+/* =====================================================
+   Record Zone
+   ===================================================== */
+.record-zone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  background: var(--surface);
+  border: 2px dashed var(--border);
+  border-radius: var(--radius-xl);
+  padding: 64px 40px;
+  animation: fadeUp 0.4s ease both;
+}
+
+.recording-indicator {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.red-dot {
+  width: 14px;
+  height: 14px;
+  background: #ef4444;
+  border-radius: 50%;
+  animation: pulse-red 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-red {
+  0% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+  }
+
+  70% {
+    transform: scale(1);
+    box-shadow: 0 0 0 8px rgba(239, 68, 68, 0);
+  }
+
+  100% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+  }
+}
+
+.timer {
+  font-size: 1.4rem;
+  font-family: monospace;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: 0.05em;
+}
+
+.mic-error {
+  color: #ef4444;
+  font-size: 0.875rem;
+  text-align: center;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  padding: 10px 16px;
+  border-radius: var(--radius);
+  width: 100%;
+  max-width: 480px;
+  margin: 0;
 }
 
 /* =====================================================
@@ -247,7 +316,7 @@
 
 .upload-zone:hover {
   border-color: var(--brand-hover);
-  background: rgba(99,102,241,0.05);
+  background: rgba(99, 102, 241, 0.05);
 }
 
 .upload-zone-icon {
@@ -320,7 +389,6 @@
   color: var(--text-muted);
 }
 
-/* Hidden real input */
 .upload-zone input[type="file"] {
   position: absolute;
   inset: 0;
@@ -328,63 +396,6 @@
   height: 100%;
   opacity: 0;
   cursor: pointer;
-}
-
-/* =====================================================
-   Record Zone  (from feature-liveRecording, restyled)
-   ===================================================== */
-.record-zone {
-  border: 2px dashed var(--border);
-  border-radius: var(--radius-xl);
-  background: var(--surface);
-  padding: 64px 40px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 24px;
-  animation: fadeUp 0.5s ease both;
-}
-
-.recording-indicator {
-  display: flex;
-  align-items: center;
-  gap: 18px;
-}
-
-.red-dot {
-  width: 14px;
-  height: 14px;
-  background-color: #ef4444;
-  border-radius: 50%;
-  animation: pulse-rec 1.5s infinite;
-}
-
-@keyframes pulse-rec {
-  0%   { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
-  70%  { transform: scale(1);    box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
-  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
-}
-
-.timer {
-  font-size: 1.5rem;
-  font-family: monospace;
-  font-weight: 700;
-  color: var(--text);
-  letter-spacing: 0.05em;
-  min-width: 72px;
-  text-align: center;
-}
-
-.mic-error {
-  color: #ef4444;
-  font-size: 0.875rem;
-  text-align: center;
-  background: rgba(239, 68, 68, 0.08);
-  border: 1px solid rgba(239, 68, 68, 0.25);
-  border-radius: var(--radius);
-  padding: 12px 20px;
-  max-width: 480px;
 }
 
 /* =====================================================
@@ -461,7 +472,9 @@
   animation: spin 0.8s linear infinite;
 }
 
-.processing-info { text-align: center; }
+.processing-info {
+  text-align: center;
+}
 
 .processing-title {
   font-size: 1.1rem;
@@ -497,8 +510,11 @@
 .progress-bar-fill::after {
   content: '';
   position: absolute;
-  top: 0; right: 0; bottom: 0; left: 0;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
 }
@@ -538,7 +554,9 @@
   padding: 4px 12px;
 }
 
-.meta-chip svg { color: var(--brand); }
+.meta-chip svg {
+  color: var(--brand);
+}
 
 .results-grid {
   display: grid;
@@ -562,7 +580,9 @@
   transition: border-color 0.15s ease;
 }
 
-.card:hover { border-color: var(--border-light); }
+.card:hover {
+  border-color: var(--border-light);
+}
 
 .card-header {
   display: flex;
@@ -582,10 +602,26 @@
   flex-shrink: 0;
 }
 
-.card-icon.indigo { background: var(--brand-dim); color: var(--brand); }
-.card-icon.green  { background: var(--green-dim);  color: var(--green); }
-.card-icon.amber  { background: var(--amber-dim);  color: var(--amber); }
-.card-icon.slate  { background: var(--surface-2);  color: var(--text-muted); border: 1px solid var(--border); }
+.card-icon.indigo {
+  background: var(--brand-dim);
+  color: var(--brand);
+}
+
+.card-icon.green {
+  background: var(--green-dim);
+  color: var(--green);
+}
+
+.card-icon.amber {
+  background: var(--amber-dim);
+  color: var(--amber);
+}
+
+.card-icon.slate {
+  background: var(--surface-2);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+}
 
 .card-title {
   font-size: 0.9rem;
@@ -594,8 +630,9 @@
   margin: 0;
 }
 
-/* Full-width cards */
-.card.full { grid-column: 1 / -1; }
+.card.full {
+  grid-column: 1 / -1;
+}
 
 /* =====================================================
    Stats Row
@@ -693,7 +730,9 @@
   transition: border-color 0.15s ease;
 }
 
-.action-item:hover { border-color: var(--border-light); }
+.action-item:hover {
+  border-color: var(--border-light);
+}
 
 .action-bullet {
   width: 20px;
@@ -708,9 +747,13 @@
   margin-top: 2px;
 }
 
-.action-bullet svg { color: var(--green); }
+.action-bullet svg {
+  color: var(--green);
+}
 
-.action-body { flex: 1; }
+.action-body {
+  flex: 1;
+}
 
 .action-task {
   font-size: 0.875rem;
@@ -754,44 +797,222 @@
 /* =====================================================
    Animations
    ===================================================== */
-@keyframes spin {
-  0%   { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-@keyframes pulse-dot {
-  0%, 100% { opacity: 1; }
-  50%       { opacity: 0.4; }
-}
-
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to   { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes fadeUp {
-  from { opacity: 0; transform: translateY(12px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 @keyframes shimmer {
-  0%   { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
+  0% {
+    background-position: 200% 0;
+  }
+
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+@keyframes pulse-dot {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.4;
+  }
 }
 
 /* =====================================================
    Responsive
    ===================================================== */
 @media (max-width: 960px) {
-  .sidebar { display: none; }
-  .content-area { padding: 24px 20px; }
-  .results-grid { grid-template-columns: 1fr; }
-  .stats-row { grid-template-columns: 1fr 1fr; }
+  .sidebar {
+    display: none;
+  }
+
+  .content-area {
+    padding: 24px 20px;
+  }
+
+  .results-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .stats-row {
+    grid-template-columns: 1fr 1fr;
+  }
 }
 
 @media (max-width: 600px) {
-  .stats-row { grid-template-columns: 1fr; }
-  .topnav { padding: 0 16px; }
-  .record-zone { padding: 48px 20px; }
-  .recording-indicator { flex-direction: column; gap: 12px; }
+  .stats-row {
+    grid-template-columns: 1fr;
+  }
+
+  .topnav {
+    padding: 0 16px;
+  }
+}
+
+/* =====================================================
+   Recording Mode Selector
+   ===================================================== */
+.record-mode-selector {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  max-width: 520px;
+}
+
+.record-mode-label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.record-mode-btns {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+}
+
+.record-mode-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 20px 16px;
+  border-radius: var(--radius-lg);
+  border: 2px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: inherit;
+}
+
+.record-mode-btn span {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.record-mode-btn small {
+  font-size: 0.75rem;
+  color: var(--text-subtle);
+  text-align: center;
+  line-height: 1.4;
+}
+
+.record-mode-btn:hover {
+  border-color: var(--brand);
+  background: var(--brand-dim);
+}
+
+.record-mode-btn.active {
+  border-color: var(--brand);
+  background: var(--brand-dim);
+  color: var(--brand);
+}
+
+.record-mode-btn.active span {
+  color: var(--brand-hover);
+}
+
+.record-hint {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  width: 100%;
+  font-size: 0.825rem;
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+
+.record-hint strong {
+  color: var(--text);
+  display: block;
+  margin-bottom: 8px;
+}
+
+.record-hint ol {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.record-hint strong {
+  color: var(--brand-hover);
+  font-weight: 700;
+}
+
+/* =====================================================
+   Tab Switcher
+   ===================================================== */
+.tab-switcher {
+  display: flex;
+  gap: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 6px;
+  width: fit-content;
+}
+
+.tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: transparent;
+  color: var(--text-muted);
+  border: none;
+  border-radius: var(--radius);
+  padding: 9px 20px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.tab-btn:hover:not(.active) {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.tab-btn.active {
+  background: var(--brand);
+  color: #fff;
+  box-shadow: 0 2px 8px var(--brand-glow);
 }
