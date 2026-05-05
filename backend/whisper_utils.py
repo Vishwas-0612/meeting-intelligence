@@ -15,7 +15,7 @@ def _configure_ffmpeg_path():
 
     if os.path.isfile(ffmpeg_path):
         os.environ["PATH"] = os.path.dirname(ffmpeg_path) + os.pathsep + os.environ.get("PATH", "")
-
+        
 
 def _ensure_ffmpeg_available():
     if shutil.which("ffmpeg") is None:

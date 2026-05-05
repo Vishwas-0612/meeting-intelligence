@@ -12,9 +12,27 @@ try:
 except Exception:
 	load_dotenv = None
 
+
+def _load_env_file(env_path: Path) -> None:
+	if not env_path.exists():
+		return
+
+	if load_dotenv:
+		load_dotenv(env_path)
+		return
+
+	for line in env_path.read_text(encoding="utf-8").splitlines():
+		line = line.strip()
+		if not line or line.startswith("#") or "=" not in line:
+			continue
+
+		key, value = line.split("=", 1)
+		key = key.strip()
+		value = value.strip().strip('"').strip("'")
+		os.environ.setdefault(key, value)
+
 env_path = Path(__file__).with_name(".env")
-if load_dotenv and env_path.exists():
-	load_dotenv(env_path)
+_load_env_file(env_path)
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 
