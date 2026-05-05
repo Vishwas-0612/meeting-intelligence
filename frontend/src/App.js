@@ -6,7 +6,6 @@ import {
   FileAudio,
   LayoutDashboard,
   History,
-  Settings,
   CheckCircle2,
   FileText,
   BarChart3,
@@ -18,6 +17,7 @@ import {
   ChevronRight,
   Trash2,
   Monitor,
+  ArrowLeft,
 } from "lucide-react";
 import "./App.css";
 
@@ -115,6 +115,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState("upload");
   const [file, setFile] = useState(null);
   const [result, setResult] = useState(null);
+  const [resultSource, setResultSource] = useState(null); // "upload" | "history"
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [processingLabel, setProcessingLabel] = useState(LABELS[0]);
@@ -126,7 +127,7 @@ export default function App() {
   const [recordingTime, setRecordingTime] = useState(0);
   const [mediaRecorder, setMediaRecorder] = useState(null);
   const [micError, setMicError] = useState("");
-  const [recordingMode, setRecordingMode] = useState("system"); // "mic" | "system"
+  const [recordingMode, setRecordingMode] = useState("system");
   const timerRef = useRef(null);
   const audioContextRef = useRef(null);
 
@@ -155,6 +156,7 @@ export default function App() {
     setProcessingLabel("Complete!");
     setTimeout(() => {
       setResult(data);
+      setResultSource("upload");
       fetchMeetings();
       setLoading(false);
     }, 800);
@@ -202,21 +204,16 @@ export default function App() {
       let stream;
 
       if (recordingMode === "mic") {
-        // Mic only — captures your voice only
         stream = await navigator.mediaDevices.getUserMedia({
           audio: { echoCancellation: true, noiseSuppression: true, sampleRate: 16000 },
         });
-
       } else {
-        // System audio + mic mixed — captures all participants + your voice
-        // Step 1: prompt user to share screen WITH "Share system audio" checked
         let systemStream;
         try {
           systemStream = await navigator.mediaDevices.getDisplayMedia({
             video: true,
             audio: { echoCancellation: false, noiseSuppression: false, sampleRate: 16000 },
           });
-          // Immediately stop video track — we only needed it to trigger the dialog
           systemStream.getVideoTracks().forEach(t => t.stop());
         } catch (e) {
           setMicError(
@@ -226,38 +223,26 @@ export default function App() {
           return;
         }
 
-        // Check system audio track was actually granted
         const systemAudioTracks = systemStream.getAudioTracks();
         if (systemAudioTracks.length === 0) {
           systemStream.getTracks().forEach(t => t.stop());
-          setMicError(
-            'No system audio was captured. In the sharing dialog, make sure to check "Share system audio" before clicking Share.'
-          );
+          setMicError('No system audio was captured. Make sure to check "Share system audio" before clicking Share.');
           return;
         }
 
-        // Step 2: also get mic
         let micStream;
         try {
           micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
         } catch (e) {
-          // Mic denied — proceed with system audio only
           micStream = null;
         }
 
-        // Step 3: mix system audio + mic using AudioContext
         const audioContext = new AudioContext();
         audioContextRef.current = audioContext;
         const destination = audioContext.createMediaStreamDestination();
-
         audioContext.createMediaStreamSource(systemStream).connect(destination);
-        if (micStream) {
-          audioContext.createMediaStreamSource(micStream).connect(destination);
-        }
-
+        if (micStream) audioContext.createMediaStreamSource(micStream).connect(destination);
         stream = destination.stream;
-
-        // Cleanup system/mic streams when recording stops
         stream._cleanup = () => {
           systemStream.getTracks().forEach(t => t.stop());
           if (micStream) micStream.getTracks().forEach(t => t.stop());
@@ -267,7 +252,6 @@ export default function App() {
 
       const recorder = new MediaRecorder(stream);
       const chunks = [];
-
       recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
       recorder.onstop = () => {
         const blob = new Blob(chunks, { type: "audio/webm" });
@@ -296,7 +280,17 @@ export default function App() {
     }
   };
 
-  const resetRecording = () => { setResult(null); setRecordingTime(0); };
+  /* ── Back to dashboard ────────────────────────── */
+  const goBackToDashboard = () => {
+    setResult(null);
+    setResultSource(null);
+    setFile(null);
+    setRecordingTime(0);
+    // If we came from history, go back to history; otherwise stay on dashboard
+    if (resultSource === "history") {
+      setActiveNav("history");
+    }
+  };
 
   /* ── Meetings ─────────────────────────────────── */
   const fetchMeetings = async () => {
@@ -307,10 +301,13 @@ export default function App() {
   };
 
   const clearAllMeetings = async () => {
-    if (!window.confirm("Clear all past meetings? This cannot be undone.")) return;
+    if (!window.confirm(
+      "This will permanently delete all meetings and their summaries from the database. This cannot be undone. Continue?"
+    )) return;
     try {
       await axios.delete("http://127.0.0.1:8000/meetings");
       setMeetings([]);
+      setResult(null);
     } catch (err) { alert("Failed to clear meetings."); }
   };
 
@@ -321,6 +318,80 @@ export default function App() {
   const dur = result ? estimatedMinutes(result.transcript) : "0";
   const aiCount = result?.action_items?.length ?? 0;
 
+  /* ── Shared results block ─────────────────────── */
+  const ResultsView = () => (
+    <>
+      {/* Back button */}
+      <div>
+        <button
+          className="btn btn-ghost back-btn"
+          onClick={goBackToDashboard}
+        >
+          <ArrowLeft size={15} />
+          {resultSource === "history" ? "Back to Past Meetings" : "New Analysis"}
+        </button>
+      </div>
+
+      <div className="results-header">
+        <div>
+          <h2 style={{ margin: "0 0 4px", fontSize: "1.15rem", fontWeight: 700 }}>
+            {result.meeting_title || "Analysis Complete"}
+          </h2>
+          <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--text-muted)" }}>
+            {resultSource === "history"
+              ? (result.created_at ? new Date(result.created_at).toLocaleString() : "Past meeting")
+              : (file?.name ?? "Live Recording")}
+          </p>
+        </div>
+        <div className="results-meta">
+          <span className="meta-chip"><Clock size={13} /> {dur} min</span>
+          <span className="meta-chip"><BarChart3 size={13} /> {wc} words</span>
+          <span className="meta-chip"><CheckCircle2 size={13} /> {aiCount} actions</span>
+        </div>
+      </div>
+
+      <div className="stats-row">
+        <div className="stat-card"><div className="stat-label">Duration (est.)</div><div className="stat-value">{dur}<span className="stat-unit">min</span></div></div>
+        <div className="stat-card"><div className="stat-label">Words Spoken</div><div className="stat-value">{wc.toLocaleString()}</div></div>
+        <div className="stat-card"><div className="stat-label">Action Items</div><div className="stat-value" style={{ color: aiCount > 0 ? "var(--green)" : "inherit" }}>{aiCount}</div></div>
+      </div>
+
+      <div className="results-grid">
+        <div className="card full">
+          <div className="card-header"><div className="card-icon indigo"><Sparkles size={16} /></div><h3 className="card-title">Executive Summary</h3></div>
+          <div className="summary-body">{renderMarkdown(result.summary)}</div>
+        </div>
+
+        <div className="card">
+          <div className="card-header"><div className="card-icon green"><CheckCircle2 size={16} /></div><h3 className="card-title">Action Items</h3></div>
+          {result.action_items && result.action_items.length > 0 ? (
+            <ul className="action-list">
+              {result.action_items.map((item, i) => (
+                <li key={i} className="action-item">
+                  <div className="action-bullet"><CheckCircle2 size={11} /></div>
+                  <div className="action-body">
+                    <div className="action-task">{item.task}</div>
+                    <div className="action-meta">
+                      {item.owner && <span><User size={11} /> {item.owner}</span>}
+                      {item.deadline && <span><Calendar size={11} /> {item.deadline}</span>}
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="empty-state">No clear action items were identified.</p>
+          )}
+        </div>
+
+        <div className="card">
+          <div className="card-header"><div className="card-icon slate"><FileText size={16} /></div><h3 className="card-title">Full Transcript</h3></div>
+          <div className="transcript-body">{result.transcript || "No transcript available."}</div>
+        </div>
+      </div>
+    </>
+  );
+
   return (
     <div className="app-shell">
 
@@ -328,7 +399,7 @@ export default function App() {
       <nav className="topnav">
         <div className="topnav-brand">
           <div className="brand-icon"><Mic size={16} color="#fff" strokeWidth={2.5} /></div>
-          <span className="brand-name">MeetingIQ</span>
+          <span className="brand-name">Meeting Intelligence</span>
           <span className="brand-badge">AI</span>
         </div>
         <div className="topnav-actions">
@@ -343,12 +414,19 @@ export default function App() {
           <span className="sidebar-section-label">Workspace</span>
           {[
             { id: "dashboard", icon: <LayoutDashboard size={16} />, label: "Dashboard" },
-            { id: "history", icon: <History size={16} />, label: "Past Meetings" },
+            { id: "history",   icon: <History size={16} />,         label: "Past Meetings" },
           ].map((item) => (
             <div
               key={item.id}
-              className={`sidebar-item ${activeNav === item.id ? "active" : ""}`}
-              onClick={() => setActiveNav(item.id)}
+              className={`sidebar-item ${activeNav === item.id && !result ? "active" : ""} ${result && item.id === "dashboard" ? "active" : ""}`}
+              onClick={() => {
+                setActiveNav(item.id);
+                if (item.id === "dashboard") {
+                  setResult(null);
+                  setResultSource(null);
+                  setFile(null);
+                }
+              }}
             >
               {item.icon}{item.label}
               {item.id === "history" && meetings.length > 0 && (
@@ -358,15 +436,16 @@ export default function App() {
               )}
             </div>
           ))}
-          <div className="sidebar-bottom">
-            <div className="sidebar-item"><Settings size={16} />Settings</div>
-          </div>
         </aside>
 
         {/* ── Content ───────────────────────────────── */}
         <main className="content-area">
 
-          {activeNav === "dashboard" && (
+          {/* ── Results view (shared, shown over both tabs) ── */}
+          {result && !loading && <ResultsView />}
+
+          {/* ── Dashboard ─────────────────────────────── */}
+          {activeNav === "dashboard" && !result && (
             <>
               <div className="page-header">
                 <div>
@@ -376,7 +455,7 @@ export default function App() {
               </div>
 
               {/* Tab switcher */}
-              {!result && !loading && (
+              {!loading && (
                 <div className="tab-switcher">
                   <button className={`tab-btn ${activeTab === "upload" ? "active" : ""}`} onClick={() => { setActiveTab("upload"); setFile(null); setMicError(""); }}>
                     <Upload size={15} /> Upload Audio
@@ -405,7 +484,7 @@ export default function App() {
               )}
 
               {/* Upload tab */}
-              {!result && !loading && activeTab === "upload" && (
+              {!loading && activeTab === "upload" && (
                 <>
                   <div className={`upload-zone ${file ? "has-file" : ""}`}>
                     <input type="file" accept="audio/*" onChange={(e) => setFile(e.target.files[0])} />
@@ -439,32 +518,23 @@ export default function App() {
               )}
 
               {/* Record tab */}
-              {!result && !loading && activeTab === "record" && (
+              {!loading && activeTab === "record" && (
                 <div className="record-zone">
-
-                  {/* Mode selector */}
                   {!isRecording && (
                     <div className="record-mode-selector">
                       <p className="record-mode-label">What do you want to capture?</p>
                       <div className="record-mode-btns">
-                        <button
-                          className={`record-mode-btn ${recordingMode === "system" ? "active" : ""}`}
-                          onClick={() => setRecordingMode("system")}
-                        >
+                        <button className={`record-mode-btn ${recordingMode === "system" ? "active" : ""}`} onClick={() => setRecordingMode("system")}>
                           <Monitor size={18} />
                           <span>All Participants</span>
                           <small>System audio + mic<br />(Chrome on Windows)</small>
                         </button>
-                        <button
-                          className={`record-mode-btn ${recordingMode === "mic" ? "active" : ""}`}
-                          onClick={() => setRecordingMode("mic")}
-                        >
+                        <button className={`record-mode-btn ${recordingMode === "mic" ? "active" : ""}`} onClick={() => setRecordingMode("mic")}>
                           <Mic size={18} />
                           <span>My Voice Only</span>
                           <small>Microphone only<br />(all browsers)</small>
                         </button>
                       </div>
-
                       {recordingMode === "system" && (
                         <div className="record-hint">
                           <strong>How to capture all participants:</strong>
@@ -498,71 +568,11 @@ export default function App() {
                   )}
                 </div>
               )}
-
-              {/* Results */}
-              {result && !loading && (
-                <>
-                  <div className="results-header">
-                    <div>
-                      <h2 style={{ margin: "0 0 4px", fontSize: "1.15rem", fontWeight: 700 }}>{result.meeting_title || "Analysis Complete"}</h2>
-                      <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--text-muted)" }}>{file?.name ?? "Live Recording"}</p>
-                    </div>
-                    <div className="results-meta">
-                      <span className="meta-chip"><Clock size={13} /> {dur} min</span>
-                      <span className="meta-chip"><BarChart3 size={13} /> {wc} words</span>
-                      <span className="meta-chip"><CheckCircle2 size={13} /> {aiCount} actions</span>
-                      <button className="btn btn-ghost" style={{ fontSize: "0.82rem" }} onClick={() => { setResult(null); setFile(null); resetRecording(); }}>
-                        <Upload size={14} /> New Analysis
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="stats-row">
-                    <div className="stat-card"><div className="stat-label">Duration (est.)</div><div className="stat-value">{dur}<span className="stat-unit">min</span></div></div>
-                    <div className="stat-card"><div className="stat-label">Words Spoken</div><div className="stat-value">{wc.toLocaleString()}</div></div>
-                    <div className="stat-card"><div className="stat-label">Action Items</div><div className="stat-value" style={{ color: aiCount > 0 ? "var(--green)" : "inherit" }}>{aiCount}</div></div>
-                  </div>
-
-                  <div className="results-grid">
-                    <div className="card full">
-                      <div className="card-header"><div className="card-icon indigo"><Sparkles size={16} /></div><h3 className="card-title">Executive Summary</h3></div>
-                      <div className="summary-body">{renderMarkdown(result.summary)}</div>
-                    </div>
-
-                    <div className="card">
-                      <div className="card-header"><div className="card-icon green"><CheckCircle2 size={16} /></div><h3 className="card-title">Action Items</h3></div>
-                      {result.action_items && result.action_items.length > 0 ? (
-                        <ul className="action-list">
-                          {result.action_items.map((item, i) => (
-                            <li key={i} className="action-item">
-                              <div className="action-bullet"><CheckCircle2 size={11} /></div>
-                              <div className="action-body">
-                                <div className="action-task">{item.task}</div>
-                                <div className="action-meta">
-                                  {item.owner && <span><User size={11} /> {item.owner}</span>}
-                                  {item.deadline && <span><Calendar size={11} /> {item.deadline}</span>}
-                                </div>
-                              </div>
-                            </li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <p className="empty-state">No clear action items were identified.</p>
-                      )}
-                    </div>
-
-                    <div className="card">
-                      <div className="card-header"><div className="card-icon slate"><FileText size={16} /></div><h3 className="card-title">Full Transcript</h3></div>
-                      <div className="transcript-body">{result.transcript || "No transcript available."}</div>
-                    </div>
-                  </div>
-                </>
-              )}
             </>
           )}
 
-          {/* History tab */}
-          {activeNav === "history" && (
+          {/* ── History ───────────────────────────────── */}
+          {activeNav === "history" && !result && (
             <>
               <div className="page-header">
                 <div>
@@ -570,7 +580,12 @@ export default function App() {
                   <p className="page-subtitle">{meetings.length} meeting{meetings.length !== 1 ? "s" : ""} analyzed.</p>
                 </div>
                 {meetings.length > 0 && (
-                  <button className="btn btn-ghost" style={{ fontSize: "0.82rem", color: "var(--red)", borderColor: "rgba(239,68,68,0.3)" }} onClick={clearAllMeetings}>
+                  <button
+                    className="btn btn-ghost"
+                    style={{ fontSize: "0.82rem", color: "var(--red)", borderColor: "rgba(239,68,68,0.3)" }}
+                    onClick={clearAllMeetings}
+                    title="Permanently deletes all meetings from the database"
+                  >
                     <Trash2 size={14} /> Clear All
                   </button>
                 )}
@@ -593,7 +608,15 @@ export default function App() {
                           {m.action_items?.length > 0 && <span>· {m.action_items.length} action{m.action_items.length !== 1 ? "s" : ""}</span>}
                         </div>
                       </div>
-                      <button className="btn btn-ghost" style={{ fontSize: "0.8rem" }} onClick={() => { setFile(null); setResult(m); setActiveNav("dashboard"); }}>
+                      <button
+                        className="btn btn-ghost"
+                        style={{ fontSize: "0.8rem" }}
+                        onClick={() => {
+                          setResult(m);
+                          setResultSource("history");
+                          setActiveNav("dashboard");
+                        }}
+                      >
                         View <ChevronRight size={14} />
                       </button>
                     </div>
