@@ -12,6 +12,9 @@ Current processing flow:
 ## Features
 
 - Audio upload from web UI
+- Live audio recording with two capture modes:
+  - **All Participants**: Captures system audio (other participants) mixed with your microphone (Chrome on Windows).
+  - **My Voice Only**: Captures only your microphone.
 - Whisper-based transcription
 - AI-generated summary and action items
 - Decisions and open issues extraction
