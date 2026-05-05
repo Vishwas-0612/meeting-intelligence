@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import {
   Mic,
@@ -37,12 +37,9 @@ function formatBytes(bytes) {
 /* ─── Clean raw LLM summary text ─────────────────── */
 function cleanSummary(text) {
   if (!text) return "";
-  // Cut off anything from "### Action Items" onwards — those belong in the action items block
   const cutOff = text.search(/###\s*Action Items/i);
   if (cutOff !== -1) text = text.slice(0, cutOff);
-  // Remove "Meeting Title:" prefix lines the LLM sometimes emits
   text = text.replace(/^\*?Meeting Title\*?:.*$/gim, "");
-  // Remove raw separator lines (===, ---)
   text = text.replace(/^[=\-]{4,}$/gm, "");
   return text.trim();
 }
@@ -50,7 +47,12 @@ function cleanSummary(text) {
 /* ─── Markdown renderer (bold, italic, headings, lists) ── */
 function renderMarkdown(rawText) {
   const text = cleanSummary(rawText);
-  if (!text) return <p className="summary-para" style={{color:"var(--text-subtle)"}}>No summary generated.</p>;
+  if (!text)
+    return (
+      <p className="summary-para" style={{ color: "var(--text-subtle)" }}>
+        No summary generated.
+      </p>
+    );
 
   const lines = text.split("\n");
   const elements = [];
@@ -59,32 +61,45 @@ function renderMarkdown(rawText) {
   const flushPara = (key) => {
     if (!paraLines.length) return;
     const joined = paraLines.join(" ").trim();
-    if (joined) elements.push(<p key={key} className="summary-para">{inlineMarkdown(joined)}</p>);
+    if (joined)
+      elements.push(
+        <p key={key} className="summary-para">
+          {inlineMarkdown(joined)}
+        </p>
+      );
     paraLines = [];
   };
 
   lines.forEach((line, i) => {
     const trimmed = line.trim();
-    // Skip blank separator lines
-    if (!trimmed || /^[=\-]{3,}$/.test(trimmed)) { flushPara(`p${i}`); return; }
-    // ### Heading
+    if (!trimmed || /^[=\-]{3,}$/.test(trimmed)) {
+      flushPara(`p${i}`);
+      return;
+    }
     if (/^#{1,3}\s/.test(trimmed)) {
       flushPara(`p${i}`);
       const heading = trimmed.replace(/^#{1,3}\s+/, "");
       elements.push(
         <p key={`h${i}`} className="summary-para">
-          <strong style={{color:"var(--text)", fontSize:"0.95rem"}}>{heading}</strong>
+          <strong style={{ color: "var(--text)", fontSize: "0.95rem" }}>
+            {heading}
+          </strong>
         </p>
       );
       return;
     }
-    // Numbered or bullet list item
     if (/^(\d+\.|[-*•])\s/.test(trimmed)) {
       flushPara(`p${i}`);
       const content = trimmed.replace(/^(\d+\.|[-*•])\s+/, "");
       elements.push(
-        <p key={`li${i}`} className="summary-para" style={{paddingLeft:"1.2em", position:"relative"}}>
-          <span style={{position:"absolute", left:0, color:"var(--brand)"}}>›</span>
+        <p
+          key={`li${i}`}
+          className="summary-para"
+          style={{ paddingLeft: "1.2em", position: "relative" }}
+        >
+          <span style={{ position: "absolute", left: 0, color: "var(--brand)" }}>
+            ›
+          </span>
           {inlineMarkdown(content)}
         </p>
       );
@@ -99,10 +114,16 @@ function renderMarkdown(rawText) {
 function inlineMarkdown(text) {
   const parts = [];
   const regex = /\*\*\*(.+?)\*\*\*|\*\*(.+?)\*\*|\*(.+?)\*/g;
-  let last = 0, m;
+  let last = 0,
+    m;
   while ((m = regex.exec(text)) !== null) {
     if (m.index > last) parts.push(text.slice(last, m.index));
-    if (m[1]) parts.push(<strong key={m.index}><em>{m[1]}</em></strong>);
+    if (m[1])
+      parts.push(
+        <strong key={m.index}>
+          <em>{m[1]}</em>
+        </strong>
+      );
     else if (m[2]) parts.push(<strong key={m.index}>{m[2]}</strong>);
     else if (m[3]) parts.push(<em key={m.index}>{m[3]}</em>);
     last = m.index + m[0].length;
@@ -110,7 +131,6 @@ function inlineMarkdown(text) {
   if (last < text.length) parts.push(text.slice(last));
   return parts;
 }
-
 
 /* ─── Processing labels ───────────────────────────── */
 const LABELS = [
@@ -122,6 +142,7 @@ const LABELS = [
 ];
 
 export default function App() {
+  const [activeTab, setActiveTab] = useState("upload");
   const [file, setFile] = useState(null);
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -129,6 +150,19 @@ export default function App() {
   const [processingLabel, setProcessingLabel] = useState(LABELS[0]);
   const [meetings, setMeetings] = useState([]);
   const [activeNav, setActiveNav] = useState("dashboard");
+
+  // Recording states
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0);
+  const [mediaRecorder, setMediaRecorder] = useState(null);
+  const [micError, setMicError] = useState("");
+  const timerRef = useRef(null);
+
+  const formatTime = (seconds) => {
+    const m = Math.floor(seconds / 60).toString().padStart(2, "0");
+    const s = (seconds % 60).toString().padStart(2, "0");
+    return `${m}:${s}`;
+  };
 
   /* ── Upload ───────────────────────────────────── */
   const uploadFile = async () => {
@@ -150,7 +184,10 @@ export default function App() {
     }, 450);
 
     try {
-      const res = await axios.post("http://127.0.0.1:8000/upload-audio/", formData);
+      const res = await axios.post(
+        "http://127.0.0.1:8000/upload-audio/",
+        formData
+      );
       clearInterval(tick);
       setProgress(100);
       setProcessingLabel("Complete!");
@@ -167,6 +204,92 @@ export default function App() {
     }
   };
 
+  /* ── Recording ────────────────────────────────── */
+  const startRecording = async () => {
+    setMicError("");
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      const chunks = [];
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunks.push(e.data);
+      };
+
+      recorder.onstop = () => {
+        const audioBlob = new Blob(chunks, { type: "audio/webm" });
+        uploadAudioBlob(audioBlob);
+        stream.getTracks().forEach((track) => track.stop());
+      };
+
+      setMediaRecorder(recorder);
+      recorder.start();
+      setIsRecording(true);
+      setRecordingTime(0);
+
+      timerRef.current = setInterval(() => {
+        setRecordingTime((prev) => prev + 1);
+      }, 1000);
+    } catch (err) {
+      console.error("Mic access denied:", err);
+      setMicError(
+        "Microphone access was denied. Please allow microphone access in your browser settings."
+      );
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorder && mediaRecorder.state !== "inactive") {
+      mediaRecorder.stop();
+      setIsRecording(false);
+      clearInterval(timerRef.current);
+    }
+  };
+
+  const uploadAudioBlob = async (blob) => {
+    const formData = new FormData();
+    formData.append("file", blob, `recording-${Date.now()}.webm`);
+
+    setLoading(true);
+    setProgress(0);
+    setResult(null);
+
+    let current = 0;
+    const tick = setInterval(() => {
+      current += Math.random() * 4;
+      if (current > 90) current = 90;
+      setProgress(Math.floor(current));
+      const idx = Math.floor((current / 100) * LABELS.length);
+      setProcessingLabel(LABELS[Math.min(idx, LABELS.length - 1)]);
+    }, 450);
+
+    try {
+      const res = await axios.post(
+        "http://127.0.0.1:8000/upload-audio/",
+        formData
+      );
+      clearInterval(tick);
+      setProgress(100);
+      setProcessingLabel("Complete!");
+      setTimeout(() => {
+        setResult(res.data);
+        fetchMeetings();
+        setLoading(false);
+      }, 800);
+    } catch (err) {
+      clearInterval(tick);
+      console.error(err);
+      alert("Error processing meeting. Is the backend running?");
+      setLoading(false);
+    }
+  };
+
+  const resetRecording = () => {
+    setResult(null);
+    setRecordingTime(0);
+  };
+
+  /* ── Meetings API ─────────────────────────────── */
   const fetchMeetings = async () => {
     try {
       const res = await axios.get("http://127.0.0.1:8000/meetings");
@@ -175,7 +298,8 @@ export default function App() {
   };
 
   const clearAllMeetings = async () => {
-    if (!window.confirm("Clear all past meetings? This cannot be undone.")) return;
+    if (!window.confirm("Clear all past meetings? This cannot be undone."))
+      return;
     try {
       await axios.delete("http://127.0.0.1:8000/meetings");
       setMeetings([]);
@@ -185,10 +309,19 @@ export default function App() {
     }
   };
 
-  useEffect(() => { fetchMeetings(); }, []);
+  useEffect(() => {
+    fetchMeetings();
+  }, []);
+
+  // Cleanup timer on unmount
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, []);
 
   /* ── Derived ──────────────────────────────────── */
-  const wc  = result ? wordCount(result.transcript) : 0;
+  const wc = result ? wordCount(result.transcript) : 0;
   const dur = result ? estimatedMinutes(result.transcript) : "0";
   const aiCount = result?.action_items?.length ?? 0;
 
@@ -267,9 +400,29 @@ export default function App() {
               <div className="page-header">
                 <div>
                   <h1 className="page-title">Meeting Intelligence</h1>
-                  <p className="page-subtitle">Upload an audio recording to extract insights, summaries & action items.</p>
+                  <p className="page-subtitle">
+                    Upload an audio file or record live to extract insights, summaries & action items.
+                  </p>
                 </div>
               </div>
+
+              {/* ── Tab Switcher ─────────────────── */}
+              {!result && !loading && (
+                <div className="tab-switcher">
+                  <button
+                    className={`tab-btn ${activeTab === "upload" ? "active" : ""}`}
+                    onClick={() => { setActiveTab("upload"); setFile(null); setMicError(""); }}
+                  >
+                    <Upload size={15} /> Upload Audio
+                  </button>
+                  <button
+                    className={`tab-btn ${activeTab === "record" ? "active" : ""}`}
+                    onClick={() => { setActiveTab("record"); setFile(null); setMicError(""); }}
+                  >
+                    <Mic size={15} /> Record Live
+                  </button>
+                </div>
+              )}
 
               {/* ── Processing card ─────────────── */}
               {loading && (
@@ -288,8 +441,8 @@ export default function App() {
                 </div>
               )}
 
-              {/* ── Upload zone (only when no result) ── */}
-              {!result && !loading && (
+              {/* ── Upload Tab ──────────────────── */}
+              {!result && !loading && activeTab === "upload" && (
                 <>
                   <div className={`upload-zone ${file ? "has-file" : ""}`}>
                     <input
@@ -341,6 +494,37 @@ export default function App() {
                 </>
               )}
 
+              {/* ── Record Tab ──────────────────── */}
+              {!result && !loading && activeTab === "record" && (
+                <div className="record-zone">
+                  {micError && <p className="mic-error">{micError}</p>}
+
+                  {!isRecording && (
+                    <button
+                      className="btn btn-primary"
+                      style={{ fontSize: "0.95rem", padding: "14px 32px" }}
+                      onClick={startRecording}
+                    >
+                      <Mic size={18} /> Start Recording
+                    </button>
+                  )}
+
+                  {isRecording && (
+                    <div className="recording-indicator">
+                      <div className="red-dot" />
+                      <span className="timer">{formatTime(recordingTime)}</span>
+                      <button
+                        className="btn btn-primary"
+                        style={{ background: "var(--red, #ef4444)", fontSize: "0.9rem", padding: "12px 24px" }}
+                        onClick={stopRecording}
+                      >
+                        Stop & Analyse
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* ── Results ─────────────────────── */}
               {result && !loading && (
                 <>
@@ -351,7 +535,7 @@ export default function App() {
                         {result.meeting_title || "Analysis Complete"}
                       </h2>
                       <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--text-muted)" }}>
-                        {file?.name ?? "Recording"}
+                        {file?.name ?? "Live Recording"}
                       </p>
                     </div>
                     <div className="results-meta">
@@ -361,7 +545,11 @@ export default function App() {
                       <button
                         className="btn btn-ghost"
                         style={{ fontSize: "0.82rem" }}
-                        onClick={() => { setResult(null); setFile(null); }}
+                        onClick={() => {
+                          setResult(null);
+                          setFile(null);
+                          resetRecording();
+                        }}
                       >
                         <Upload size={14} /> New Analysis
                       </button>
@@ -455,7 +643,9 @@ export default function App() {
               <div className="page-header">
                 <div>
                   <h1 className="page-title">Past Meetings</h1>
-                  <p className="page-subtitle">{meetings.length} meeting{meetings.length !== 1 ? "s" : ""} analyzed.</p>
+                  <p className="page-subtitle">
+                    {meetings.length} meeting{meetings.length !== 1 ? "s" : ""} analyzed.
+                  </p>
                 </div>
                 {meetings.length > 0 && (
                   <button
@@ -470,7 +660,7 @@ export default function App() {
 
               {meetings.length === 0 ? (
                 <div style={{ color: "var(--text-subtle)", fontSize: "0.9rem", textAlign: "center", paddingTop: 60 }}>
-                  No meetings analyzed yet. Upload an audio file to get started.
+                  No meetings analyzed yet. Upload an audio file or record live to get started.
                 </div>
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -485,8 +675,12 @@ export default function App() {
                         </div>
                         <div style={{ fontSize: "0.8rem", color: "var(--text-subtle)", marginTop: 3, display: "flex", gap: 10, flexWrap: "wrap" }}>
                           <span>{m.created_at ? new Date(m.created_at).toLocaleString() : "—"}</span>
-                          {m.transcript && <span>· {estimatedMinutes(m.transcript)} min · {wordCount(m.transcript).toLocaleString()} words</span>}
-                          {m.action_items?.length > 0 && <span>· {m.action_items.length} action{m.action_items.length !== 1 ? "s" : ""}</span>}
+                          {m.transcript && (
+                            <span>· {estimatedMinutes(m.transcript)} min · {wordCount(m.transcript).toLocaleString()} words</span>
+                          )}
+                          {m.action_items?.length > 0 && (
+                            <span>· {m.action_items.length} action{m.action_items.length !== 1 ? "s" : ""}</span>
+                          )}
                         </div>
                       </div>
                       <button
